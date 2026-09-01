@@ -1,0 +1,15 @@
+# Render Blueprint (https://render.com/docs/infrastructure-as-code).
+# Not required to deploy manually via the Render dashboard, but lets
+# `render blueprint` (or "New +" -> "Blueprint" pointing at this repo)
+# create the service with the right build/start commands and Python
+# version in one step instead of re-entering them by hand.
+services:
+  - type: web
+    name: pl-match-predictor-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api:app --app-dir src --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.5
