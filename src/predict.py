@@ -76,7 +76,12 @@ def load_artifacts():
 
 
 def predict(model, state, home_team: str, away_team: str, date: pd.Timestamp,
-            avg_h: float, avg_d: float, avg_a: float, season: str | None = None) -> dict:
+            avg_h: float, avg_d: float, avg_a: float, season: str | None = None) -> tuple[dict, dict]:
+    """Returns (proba_by_class, features) -- the features dict is the exact
+    15 values sent to the model, returned alongside the prediction so a
+    caller (the API, in particular) can show its work rather than just the
+    output, without recomputing anything or duplicating pre_match_features
+    logic itself."""
     season = season or infer_season(date)
 
     for team, role in [(home_team, "home"), (away_team, "away")]:
@@ -89,7 +94,7 @@ def predict(model, state, home_team: str, away_team: str, date: pd.Timestamp,
     feats = pre_match_features(state, home_team, away_team, date, season, avg_h=avg_h, avg_d=avg_d, avg_a=avg_a)
     X = pd.DataFrame([feats])[FEATURE_COLUMNS]
     proba = model.predict_proba(X)[0]
-    return dict(zip(model.classes_, proba))
+    return dict(zip(model.classes_, proba)), feats
 
 
 def main(argv=None) -> None:
@@ -98,8 +103,8 @@ def main(argv=None) -> None:
     season = args.season or infer_season(date)
 
     model, state = load_artifacts()
-    proba_by_class = predict(model, state, args.home_team, args.away_team, date,
-                              args.avg_h, args.avg_d, args.avg_a, season=season)
+    proba_by_class, _feats = predict(model, state, args.home_team, args.away_team, date,
+                                      args.avg_h, args.avg_d, args.avg_a, season=season)
 
     print(f"\n{args.home_team} vs {args.away_team} -- {date.date()} ({season})")
     print(f"Market odds: H {args.avg_h}  D {args.avg_d}  A {args.avg_a}")

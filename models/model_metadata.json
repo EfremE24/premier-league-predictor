@@ -47,10 +47,12 @@
     "2024/25",
     "2025/26"
   ],
+  "train_row_count": 3420,
+  "test_row_count": 760,
   "test_log_loss": 0.9980894681463824,
   "test_accuracy": 0.5105263157894737,
   "feature_state_as_of_date": "2026-05-24",
   "feature_state_note": "state reflects ALL matches through the date above, not just the training window -- see module docstring 'Persisted artifacts'",
-  "saved_at_utc": "2026-09-01T23:34:13.622074+00:00",
+  "saved_at_utc": "2026-09-02T14:18:17.055473+00:00",
   "sklearn_version": "1.9.0"
 }

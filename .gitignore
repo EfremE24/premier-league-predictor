@@ -18,6 +18,12 @@ __pycache__/
 *.pyc
 .pytest_cache/
 
+# Secrets -- API keys live in env vars (Render dashboard in prod, local
+# .env for dev), never in committed files.
+.env
+.env.*
+!.env.example
+
 .venv/
 venv/
 *.egg-info/

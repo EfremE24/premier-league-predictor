@@ -26,15 +26,26 @@ fetch_data.py/features.py/train.py/predict.py already), so this keeps api.py
 consistent with the rest instead of being the one module that needs a
 different import style.
 """
+import json
+import os
 from contextlib import asynccontextmanager
 from datetime import date as date_type
+from pathlib import Path
 
 import pandas as pd
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from predict import CLASS_LABELS, infer_season, load_artifacts, predict
+from features import FEATURE_COLUMNS
+from fixtures import get_upcoming_fixtures
+from predict import CLASS_LABELS, MODELS_DIR, infer_season, load_artifacts, predict
+
+load_dotenv()  # local dev only -- reads .env if present; a no-op when it isn't
+# (Render). Production sets FOOTBALL_DATA_API_KEY as a real dashboard env var.
+
+METADATA_PATH = MODELS_DIR / "model_metadata.json"
 
 
 @asynccontextmanager
@@ -42,6 +53,18 @@ async def lifespan(app: FastAPI):
     # load_artifacts() exits the process if the model/state files are
     # missing -- fine here too: an API that can't predict shouldn't start.
     app.state.model, app.state.feature_state = load_artifacts()
+    with open(METADATA_PATH) as f:
+        app.state.metadata = json.load(f)
+    # Feature importances come straight off the loaded model (an attribute
+    # it already has, not something recomputed) so this can never drift
+    # from what the model actually learned.
+    app.state.feature_importances = sorted(
+        (
+            {"feature": name, "importance": round(float(imp), 4)}
+            for name, imp in zip(FEATURE_COLUMNS, app.state.model.feature_importances_)
+        ),
+        key=lambda row: -row["importance"],
+    )
     yield
 
 
@@ -79,13 +102,14 @@ class PredictResponse(BaseModel):
     season: str
     probabilities: dict[str, float]
     predicted_outcome: str
+    features: dict[str, float]
 
 
 @app.post("/predict", response_model=PredictResponse)
 def predict_match(req: PredictRequest, request: Request) -> PredictResponse:
     season = req.season or infer_season(pd.Timestamp(req.date))
     try:
-        proba_by_class = predict(
+        proba_by_class, feats = predict(
             request.app.state.model, request.app.state.feature_state,
             req.home_team, req.away_team, pd.Timestamp(req.date),
             req.avg_h, req.avg_d, req.avg_a, season=season,
@@ -101,7 +125,46 @@ def predict_match(req: PredictRequest, request: Request) -> PredictResponse:
         season=season,
         probabilities={CLASS_LABELS[cls]: round(float(p), 4) for cls, p in proba_by_class.items()},
         predicted_outcome=CLASS_LABELS[predicted],
+        features={k: round(float(v), 4) for k, v in feats.items()},
     )
+
+
+@app.get("/model-info")
+def model_info(request: Request) -> dict:
+    """Static facts about the trained model -- dataset size, held-out test
+    performance, and feature importances -- for a frontend to show its work
+    rather than presenting predictions as an unexplained black box. Nothing
+    here is computed per-request; it's the same for every caller until the
+    model is retrained."""
+    meta = request.app.state.metadata
+    return {
+        "model_type": meta["model_type"],
+        "feature_set": meta["feature_set"],
+        "train_seasons": meta["train_seasons"],
+        "test_seasons": meta["test_seasons"],
+        "train_row_count": meta["train_row_count"],
+        "test_row_count": meta["test_row_count"],
+        "test_log_loss": meta["test_log_loss"],
+        "test_accuracy": meta["test_accuracy"],
+        "feature_importances": request.app.state.feature_importances,
+    }
+
+
+@app.get("/fixtures")
+def list_fixtures(request: Request) -> dict:
+    """Upcoming Premier League fixtures from football-data.org, so the
+    frontend can offer a picker instead of requiring manual team/date
+    entry. Each fixture is annotated with whether each team has training
+    history in feature_state -- a team without it (e.g. freshly promoted)
+    will still predict fine via the cold-start fallback in
+    pre_match_features(), but the frontend can use this to show that
+    upfront rather than as a surprise after submitting."""
+    result = get_upcoming_fixtures(os.environ.get("FOOTBALL_DATA_API_KEY"))
+    known_teams = set(request.app.state.feature_state.elo.keys())
+    for fixture in result["fixtures"]:
+        fixture["home_team_known"] = fixture["home_team"] in known_teams
+        fixture["away_team_known"] = fixture["away_team"] in known_teams
+    return result
 
 
 @app.get("/teams")

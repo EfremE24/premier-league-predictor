@@ -217,7 +217,7 @@ def draw_overconfidence_in_range(y_true: pd.Series, proba: pd.DataFrame, low: fl
     return n, mean_pred, actual, mean_pred - actual
 
 
-def save_final_model(fitted_model, test_result: dict) -> None:
+def save_final_model(fitted_model, test_result: dict, train_row_count: int, test_row_count: int) -> None:
     """Persist the already-fitted final model plus everything predict.py
     will need to go from a raw upcoming fixture to a feature row: the
     feature-engineering state (see module docstring for why this is
@@ -243,6 +243,8 @@ def save_final_model(fitted_model, test_result: dict) -> None:
         "rf_params": {**RF_PARAMS, "class_weight": None},
         "train_seasons": TRAIN_SEASONS,
         "test_seasons": TEST_SEASONS,
+        "train_row_count": train_row_count,
+        "test_row_count": test_row_count,
         "test_log_loss": test_result["log_loss"],
         "test_accuracy": test_result["accuracy"],
         "feature_state_as_of_date": str(all_matches["Date"].max().date()),
@@ -348,7 +350,7 @@ def main() -> None:
     # ================= FINAL MODEL: save the selected fit =================
     final_name = "Combined - Random Forest"
     final_result = next(r for r in fs_results if r["model"] == final_name)
-    save_final_model(fs_models[final_name], final_result)
+    save_final_model(fs_models[final_name], final_result, train_row_count=len(train), test_row_count=len(test))
 
 
 if __name__ == "__main__":
