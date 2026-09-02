@@ -74,12 +74,19 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# No frontend deployed yet, so there's no real origin to restrict to. Open
-# for local development; narrow this to the deployed frontend's origin
-# once one exists, before this goes further than local testing.
+# Narrowed once the frontend actually had a fixed deployed URL -- open to
+# "*" only made sense before that existed. Keeps localhost too, since that's
+# still the real local-dev loop (Vite's default port; --port 5174 is what
+# this project's README/launch config actually uses).
+ALLOWED_ORIGINS = [
+    "https://premier-league-predictor-six.vercel.app",
+    "http://localhost:5173",
+    "http://localhost:5174",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
