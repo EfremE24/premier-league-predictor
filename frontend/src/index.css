@@ -6,8 +6,13 @@
   --card-bg: #ffffff;
   --border: #e2ded3;
 
-  --accent: #37003c;
-  --accent-soft: #efe6f0;
+  /* Real Premier League brand colors (2023 rebrand): Purple Power is the
+     primary, Electric Green is the accent used sparingly for "this is the
+     answer" moments -- e.g. the winning bar in a probability list -- the
+     same role it plays in the league's own broadcast graphics. */
+  --accent: #3d195b;
+  --accent-soft: #ece5f1;
+  --pl-green: #00ff85;
 
   --amber-bg: #fff2cf;
   --amber-text: #7b5200;
@@ -20,14 +25,28 @@
   --error-text: #a3231f;
   --error-border: #f3c9c7;
 
-  --radius: 4px;
+  --radius: 3px;
+
+  /* Three fonts doing three different jobs, not one font doing all of
+     them: Oswald (condensed, scoreboard-ish) for headings and anything
+     shouting a number at you; Georgia for anything meant to be read, so
+     it doesn't feel like a generated dashboard; system-ui for form
+     controls and data labels, where a plain, unopinionated face is
+     actually the right call. */
+  --font-display: 'Oswald', 'Arial Narrow', sans-serif;
+  --font-body: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+  --font-ui: system-ui, 'Segoe UI', Roboto, sans-serif;
 
   color-scheme: light;
-  font-family: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-ui);
 }
 
+/* Dark tokens apply either from OS preference (when the visitor hasn't
+   made an explicit choice on this page) or from the explicit toggle in
+   App.jsx, which sets data-theme and wins either way -- see App.jsx's
+   ThemeToggle for how data-theme gets set and persisted to localStorage. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     color-scheme: dark;
     --text: #e4e1da;
     --text-muted: #a9a49b;
@@ -36,8 +55,9 @@
     --card-bg: #26232a;
     --border: #3a3640;
 
-    --accent: #d09fe0;
+    --accent: #b98be0;
     --accent-soft: #372b3d;
+    --pl-green: #00ff85;
 
     --amber-bg: #40340f;
     --amber-text: #f0c869;
@@ -50,6 +70,31 @@
     --error-text: #f3a9a6;
     --error-border: #63201e;
   }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --text: #e4e1da;
+  --text-muted: #a9a49b;
+  --heading: #f4eef5;
+  --bg: #1c1a1e;
+  --card-bg: #26232a;
+  --border: #3a3640;
+
+  --accent: #b98be0;
+  --accent-soft: #372b3d;
+  --pl-green: #00ff85;
+
+  --amber-bg: #40340f;
+  --amber-text: #f0c869;
+  --green-bg: #17301e;
+  --green-text: #7fd897;
+  --gray-bg: #302c33;
+  --gray-text: #c3bfb8;
+
+  --error-bg: #3a1615;
+  --error-text: #f3a9a6;
+  --error-border: #63201e;
 }
 
 * {

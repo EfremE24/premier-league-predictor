@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
-import { FEATURE_GROUPS, FEATURE_LABELS, PRESETS, confidenceTier } from './content'
+import { FEATURE_GROUPS, FEATURE_LABELS, PRESETS, TEAM_COLORS, confidenceTier } from './content'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const OUTCOME_ORDER = ['Home win', 'Draw', 'Away win']
@@ -21,7 +21,47 @@ function formatFixtureDate(isoDate) {
   return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
+// Split circle, primary color on the left half and secondary on the
+// right -- a team not in TEAM_COLORS (a one-off preset opponent, say)
+// gets a plain neutral gray rather than breaking.
+function TeamSwatch({ team }) {
+  const [primary, secondary] = TEAM_COLORS[team] ?? ['#c7c2b8', '#c7c2b8']
+  return (
+    <span
+      className="team-swatch"
+      style={{ background: `linear-gradient(90deg, ${primary} 50%, ${secondary} 50%)` }}
+      title={team}
+      aria-hidden="true"
+    />
+  )
+}
+
+const THEME_KEY = 'pl-predictor-theme'
+
+function getSystemTheme() {
+  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
+
+function getStoredTheme() {
+  try {
+    return localStorage.getItem(THEME_KEY)
+  } catch {
+    return null // localStorage can throw in private-browsing/locked-down contexts
+  }
+}
+
 function App() {
+  const [theme, setTheme] = useState(() => getStoredTheme() ?? getSystemTheme())
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    try {
+      localStorage.setItem(THEME_KEY, theme)
+    } catch {
+      // per-visitor convenience only -- fine if it can't persist
+    }
+  }, [theme])
+
   const [teams, setTeams] = useState([])
   const [teamsError, setTeamsError] = useState(null)
   const [modelInfo, setModelInfo] = useState(null)
@@ -145,30 +185,21 @@ function App() {
   return (
     <div className="app">
       <header className="hero">
-        <div className="hero-text">
+        <div className="hero-top">
           <p className="kicker">PL ML Project</p>
-          <h1>Full Time</h1>
-          <p className="subtitle">
-            Premier League match outcome predictor. Home win / draw / away win probabilities
-            from a Random Forest trained on 11 seasons of results and market odds.
-          </p>
+          <button
+            type="button"
+            className="theme-toggle"
+            onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+          >
+            {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+          </button>
         </div>
-        {modelInfo && (
-          <div className="stat-pills">
-            <div className="pill">
-              <strong>{(modelInfo.train_row_count + modelInfo.test_row_count).toLocaleString()}</strong>
-              <span>real matches</span>
-            </div>
-            <div className="pill">
-              <strong>{modelInfo.test_log_loss.toFixed(3)}</strong>
-              <span>log loss</span>
-            </div>
-            <div className="pill">
-              <strong>{(modelInfo.test_accuracy * 100).toFixed(1)}%</strong>
-              <span>accuracy</span>
-            </div>
-          </div>
-        )}
+        <h1>Full Time</h1>
+        <p className="subtitle">
+          Predicts home win, draw, or away win for a Premier League fixture. Trained on 11
+          seasons of results and closing market odds -- the numbers are at the bottom of the page.
+        </p>
       </header>
 
       {teamsError && (
@@ -181,15 +212,14 @@ function App() {
       <div className="layout">
         <section className="card">
           <h2>Matchup Inputs</h2>
-          <p className="card-hint">Odds are decimal, average across bookmakers.</p>
 
           <div className="fixtures-block">
-            <p className="presets-label">Upcoming fixtures (live from football-data.org)</p>
+            <p className="block-label">Upcoming, from football-data.org</p>
             {fixturesError && !fixtures.length && (
-              <p className="fixtures-empty">Live fixtures unavailable right now -- pick a matchup manually below.</p>
+              <p className="fixtures-empty">Fixtures aren't loading right now -- pick a matchup by hand below.</p>
             )}
             {!fixturesError && !fixtures.length && (
-              <p className="fixtures-empty">Loading fixtures...</p>
+              <p className="fixtures-empty">Loading...</p>
             )}
             {fixtures.length > 0 && (
               <div className="fixtures-list">
@@ -201,7 +231,10 @@ function App() {
                     onClick={() => applyFixture(f)}
                   >
                     <span className="fixture-date">{formatFixtureDate(f.date)}</span>
-                    <span className="fixture-matchup">{f.home_team} vs {f.away_team}</span>
+                    <span className="fixture-matchup">
+                      <TeamSwatch team={f.home_team} /> {f.home_team} vs{' '}
+                      <TeamSwatch team={f.away_team} /> {f.away_team}
+                    </span>
                     {(!f.home_team_known || !f.away_team_known) && (
                       <span className="fixture-tag">cold start</span>
                     )}
@@ -212,14 +245,13 @@ function App() {
           </div>
 
           <div className="presets">
-            <p className="presets-label">Try an example matchup</p>
-            <div className="presets-row">
-              {PRESETS.map((p) => (
-                <button type="button" key={p.label} className="chip" onClick={() => applyPreset(p)}>
-                  {p.label}
-                </button>
-              ))}
-            </div>
+            <span className="block-label">or try:</span>{' '}
+            {PRESETS.map((p, i) => (
+              <span key={p.label}>
+                <button type="button" className="text-link" onClick={() => applyPreset(p)}>{p.label}</button>
+                {i < PRESETS.length - 1 && <span className="dot-sep">&middot;</span>}
+              </span>
+            ))}
           </div>
 
           <form onSubmit={handleSubmit} className="predict-form">
@@ -249,10 +281,10 @@ function App() {
             </label>
 
             <fieldset className="odds-fieldset">
-              <legend>Market odds (decimal) &mdash; defaults provided, edit if you have real ones</legend>
+              <legend>Odds (decimal)</legend>
               {oddsSearchUrl && (
                 <a href={oddsSearchUrl} target="_blank" rel="noreferrer" className="odds-lookup-link">
-                  Need current odds? Find {homeTeam} vs {awayTeam} odds &rarr;
+                  look up {homeTeam} vs {awayTeam} &rarr;
                 </a>
               )}
               <div className="field-row">
@@ -284,12 +316,15 @@ function App() {
 
         <section className="card">
           <h2>Prediction</h2>
-          {!result && <p className="card-hint">Fill in a matchup and predict to see results here.</p>}
+          {!result && <p className="card-hint">Nothing yet -- fill in a matchup.</p>}
 
           {result && tier && (
             <>
               <div className="prediction-head">
-                <p className="matchup-line">{result.home_team} vs {result.away_team}</p>
+                <p className="matchup-line">
+                  <TeamSwatch team={result.home_team} /> {result.home_team} vs{' '}
+                  <TeamSwatch team={result.away_team} /> {result.away_team}
+                </p>
                 <span className={`badge tone-${tier.tone}`}>{tier.label}</span>
               </div>
               <p className="result-meta">{result.date} &middot; {result.season}</p>
@@ -303,9 +338,13 @@ function App() {
                 {OUTCOME_ORDER.map((label) => {
                   const prob = result.probabilities[label]
                   const isWinner = label === result.predicted_outcome
+                  const rowTeam = label === 'Home win' ? result.home_team
+                    : label === 'Away win' ? result.away_team : null
                   return (
                     <li key={label} className={isWinner ? 'winner' : ''}>
-                      <span className="label">{label}</span>
+                      <span className="label">
+                        {rowTeam && <TeamSwatch team={rowTeam} />} {label}
+                      </span>
                       <div className="bar-track">
                         <div className="bar-fill" style={{ width: `${prob * 100}%` }} />
                       </div>
@@ -321,11 +360,8 @@ function App() {
 
       {result && (
         <section className="card features-used">
-          <h2>Model Features Used</h2>
-          <p className="card-hint">
-            The 15 values actually sent to the model for this prediction, computed from team
-            history as of right before this fixture.
-          </p>
+          <h2>What the model actually saw</h2>
+          <p className="card-hint">The 15 numbers behind that prediction, as of right before kickoff.</p>
           {FEATURE_GROUPS.map((group) => (
             <div key={group.group} className="feature-group">
               <p className="feature-group-label">{group.group}</p>
@@ -343,43 +379,31 @@ function App() {
         </section>
       )}
 
-      <section className="card how-to-read">
-        <h2>How To Read It</h2>
-        <p className="card-hint">The prediction is a probability estimate, not a guaranteed outcome.</p>
-        <div className="read-cards">
-          <div className="read-card">
-            <p className="read-title">Draws are genuinely hard</p>
-            <p>
-              About 1 in 4 Premier League matches end in a draw. The model puts real probability
-              mass on draws rather than avoiding the prediction, but it's the hardest class to
-              call -- see the calibration write-up in the repo for specifics.
-            </p>
-          </div>
-          <div className="read-card">
-            <p className="read-title">The market matters most</p>
-            <p>
-              The two market-odds features are the largest signal this model uses (see Feature
-              Importance below) -- more than any single team-strength feature. That matches
-              published findings that betting markets are hard to beat.
-            </p>
-          </div>
-          <div className="read-card">
-            <p className="read-title">Educational use only</p>
-            <p>
-              This is a portfolio ML project trained on historical results. It is not betting
-              advice.
-            </p>
-          </div>
-        </div>
+      <section className="editorial">
+        <h2>Before you trust the number</h2>
+        <ol className="read-list">
+          <li>
+            <strong>Draws are genuinely hard.</strong> About 1 in 4 Premier League matches end
+            level. The model puts real weight on a draw rather than dodging the call, but it's
+            the outcome it gets wrong most -- see the calibration write-up in the repo.
+          </li>
+          <li>
+            <strong>The market is doing most of the work.</strong> The two market-odds inputs
+            outweigh every team-strength feature combined (below). That tracks with the broader
+            finding that betting markets are hard to beat -- this model mostly agrees with them,
+            it doesn't outsmart them.
+          </li>
+          <li>
+            <strong>This is a portfolio project, not a tipster.</strong> Historical results,
+            trained for practice. Don't bet on it.
+          </li>
+        </ol>
       </section>
 
       {modelInfo && (
         <section className="card">
-          <h2>Feature Importance</h2>
-          <p className="card-hint">
-            How much the trained Random Forest actually relies on each input, across all
-            predictions -- not specific to the matchup above.
-          </p>
+          <h2>What the model leans on</h2>
+          <p className="card-hint">Across every prediction, not just the one above.</p>
           <ul className="importance-list">
             {modelInfo.feature_importances.map((row) => {
               const max = modelInfo.feature_importances[0].importance
@@ -399,8 +423,8 @@ function App() {
 
       {modelInfo && (
         <section className="card model-metrics">
-          <h2>Model Metrics</h2>
-          <p className="card-hint">Time-based train/test split on real Premier League seasons -- never random.</p>
+          <h2>The fine print</h2>
+          <p className="card-hint">Time-based split -- trained on earlier seasons, tested on later ones. Never random.</p>
           <div className="metrics-grid">
             <div className="metric">
               <span className="metric-value">{MODEL_TYPE_LABELS[modelInfo.model_type] ?? modelInfo.model_type}</span>
