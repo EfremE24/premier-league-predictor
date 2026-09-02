@@ -13,3 +13,5 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.13.5
+      - key: FOOTBALL_DATA_API_KEY
+        sync: false # not stored in this file -- Render prompts for it at blueprint creation instead
