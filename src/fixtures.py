@@ -65,6 +65,17 @@ TEAM_NAME_MAP = {
     "Coventry City FC": "Coventry",  # not in our historical data -- cold start, not a bug
 }
 
+# The 20 teams actually in this season's Premier League -- distinct from
+# feature_state.elo.keys() in the trained model, which has 34 team names
+# accumulated across 11 seasons of history and includes plenty of teams
+# now in the Championship (Cardiff, Watford, etc). api.py's GET /teams uses
+# this list, not the model's historical roster, so the frontend dropdown
+# only ever offers real current-season matchups. A team here with no
+# training history (e.g. Coventry above) still predicts fine via the
+# cold-start fallback in pre_match_features() -- this list is about which
+# teams are real options to pick, not which ones the model has seen before.
+CURRENT_PL_TEAMS = sorted(set(TEAM_NAME_MAP.values()))
+
 _cache: dict = {"fixtures": None, "fetched_at": 0.0, "error": None}
 
 

@@ -39,7 +39,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from features import FEATURE_COLUMNS
-from fixtures import get_upcoming_fixtures
+from fixtures import CURRENT_PL_TEAMS, get_upcoming_fixtures
 from predict import CLASS_LABELS, MODELS_DIR, infer_season, load_artifacts, predict
 
 load_dotenv()  # local dev only -- reads .env if present; a no-op when it isn't
@@ -175,11 +175,14 @@ def list_fixtures(request: Request) -> dict:
 
 
 @app.get("/teams")
-def list_teams(request: Request) -> dict:
-    """All team names the persisted feature_state has history for -- for a
-    frontend to populate dropdowns without hardcoding a team list that
-    would drift out of date as data/features.py get re-run."""
-    return {"teams": sorted(request.app.state.feature_state.elo.keys())}
+def list_teams() -> dict:
+    """The 20 teams in this season's Premier League (fixtures.py's
+    CURRENT_PL_TEAMS), not feature_state.elo.keys() -- the trained model's
+    historical roster has 34 team names accumulated across 11 seasons and
+    includes plenty of teams now in the Championship. This is what the
+    frontend dropdown should offer as real options, not everything the
+    model has ever seen."""
+    return {"teams": CURRENT_PL_TEAMS}
 
 
 @app.get("/")

@@ -44,10 +44,14 @@ export const FEATURE_LABELS = {
 }
 
 // Each preset fills the form so you can see how the model reacts to a
-// different kind of matchup without typing anything. "Newly promoted" is
-// deliberately a team with zero rows in feature_state -- it exercises the
-// cold-start fallback (neutral Elo/form/rest priors) documented in
-// features.py and predict.py, rather than being a random extra example.
+// different kind of matchup without typing anything. All four teams used
+// here are real, current Premier League teams (same set as CURRENT_PL_TEAMS
+// in src/fixtures.py) -- no Championship sides or made-up placeholder names.
+// "Newly promoted" uses Coventry specifically because it's a genuine
+// current PL team with zero rows in feature_state (confirmed against the
+// trained model), so it exercises the real cold-start fallback (neutral
+// Elo/form/rest priors, documented in features.py/predict.py) without
+// resorting to a team that doesn't actually exist in the league.
 export const PRESETS = [
   {
     label: 'Title race clash',
@@ -60,22 +64,22 @@ export const PRESETS = [
   {
     label: 'Big home favorite',
     home: 'Man City',
-    away: 'Sheffield United',
+    away: 'Sunderland',
     avgH: '1.25',
     avgD: '6.50',
     avgA: '11.00',
   },
   {
     label: 'Relegation six-pointer',
-    home: 'Luton',
-    away: 'Burnley',
+    home: 'Hull',
+    away: 'Leeds',
     avgH: '2.30',
     avgD: '3.30',
     avgA: '3.10',
   },
   {
     label: 'Newly promoted (cold start)',
-    home: 'Birmingham',
+    home: 'Coventry',
     away: 'Arsenal',
     avgH: '5.50',
     avgD: '4.20',
