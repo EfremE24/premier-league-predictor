@@ -119,7 +119,7 @@ function App() {
   // adapts to whichever fixture is selected and doesn't imply an endorsement.
   const oddsSearchUrl = useMemo(() => {
     if (!homeTeam || !awayTeam) return null
-    const query = `${homeTeam} vs ${awayTeam} odds`
+    const query = `${homeTeam} vs ${awayTeam} odds decimal`
     return `https://www.google.com/search?q=${encodeURIComponent(query)}`
   }, [homeTeam, awayTeam])
 
@@ -284,7 +284,7 @@ function App() {
               <legend>Odds (decimal)</legend>
               {oddsSearchUrl && (
                 <a href={oddsSearchUrl} target="_blank" rel="noreferrer" className="odds-lookup-link">
-                  look up {homeTeam} vs {awayTeam} &rarr;
+                  Look up {homeTeam} vs {awayTeam} (decimal) &rarr;
                 </a>
               )}
               <div className="field-row">
