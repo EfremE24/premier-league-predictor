@@ -1,0 +1,30 @@
+name: Tests
+
+# Runs the full test suite (feature-engineering leakage/cold-start checks
+# in test_features.py, API/service-layer checks in test_api.py) on every
+# push and pull request. No secrets required: GET /fixtures's real
+# football-data.org dependency is mocked out in test_api.py, so this
+# workflow never needs a FOOTBALL_DATA_API_KEY.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest tests/ -v

@@ -1,12 +1,15 @@
 # Full Time — Premier League Match Predictor
 
+[![Tests](https://github.com/EfremE24/premier-league-predictor/actions/workflows/test.yml/badge.svg)](https://github.com/EfremE24/premier-league-predictor/actions/workflows/test.yml)
+
 Predicts full-time result (home win / draw / away win) for English Premier
 League matches. A resume/portfolio data science project — full pipeline
 from raw historical data through a deployed, live-clickable web app, not
 just a notebook.
 
-**Live demo:** backend and frontend deployment in progress — links go here
-once both are up.
+**Live demo:** [premier-league-predictor-six.vercel.app](https://premier-league-predictor-six.vercel.app)
+(frontend) · [pl-match-predictor-api.onrender.com](https://pl-match-predictor-api.onrender.com)
+(backend API — free tier, may take ~30s to wake up on the first request).
 
 ## The headline result, up front
 
