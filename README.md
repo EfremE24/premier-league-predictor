@@ -11,6 +11,8 @@ just a notebook.
 (frontend) · [pl-match-predictor-api.onrender.com](https://pl-match-predictor-api.onrender.com)
 (backend API — free tier, may take ~30s to wake up on the first request).
 
+![Full Time — a live prediction with the mode switcher, fixture list, and probability breakdown](docs/screenshot.png)
+
 ## The headline result, up front
 
 51.1% accuracy sounds unremarkable in isolation. It isn't, once you see
