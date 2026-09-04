@@ -259,6 +259,23 @@ h1 {
   border-color: var(--accent);
 }
 
+.fixture-row.finished {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.fixture-row.finished:hover {
+  border-color: transparent;
+}
+
+.fixture-score {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .fixture-date {
   font-size: 11px;
   font-weight: 700;

@@ -1,4 +1,4 @@
-"""Upcoming Premier League fixtures from football-data.org.
+"""Premier League fixtures (scheduled and already-played) from football-data.org.
 
 Separate from features.py/predict.py on purpose: this module only knows
 how to talk to football-data.org and normalize its team names to match
@@ -38,11 +38,22 @@ BASE_URL = "https://api.football-data.org/v4"
 COMPETITION = "PL"
 REQUEST_TIMEOUT = 10
 CACHE_TTL_SECONDS = 6 * 60 * 60  # 6 hours -- see module docstring
-# All SCHEDULED matches for the season (~350+ once a season is underway,
-# one competition so nowhere near football-data.org's own response-size
-# limits) are returned -- no artificial cap. The frontend filters by month
-# rather than the backend truncating to "the next N", so a user can browse
-# further ahead than just the next couple of matchdays.
+# The full season (~380 matches, one competition so nowhere near
+# football-data.org's own response-size limits) is returned -- no artificial
+# cap. Both not-yet-played and already-played matches are fetched in one
+# call (status=SCHEDULED,FINISHED, comma-separated -- verified this works
+# as a single request rather than needing two round trips). Originally this
+# only fetched SCHEDULED, but that meant a match dropped off the list the
+# moment it kicked off, so a user could never see e.g. September's fixtures
+# again once September had been played -- the whole month just vanished.
+# Already-played matches are still returned here; api.py/the frontend
+# decide what to do with them (show the score, don't offer them as
+# something to predict -- feature_state.joblib is a training-time snapshot,
+# see MODEL_NOTES.md, so "predicting" an already-played match wouldn't
+# reflect the team's actual form at that point in the season anyway).
+# football-data.org's own per-match status is more granular than our two
+# buckets here (TIMED/SCHEDULED both mean "hasn't kicked off"); normalized
+# to just "SCHEDULED" or "FINISHED" in what this module returns.
 
 # football-data.org full team name -> our (football-data.co.uk-style) name.
 # Hand-verified against a live /v4/competitions/PL/teams response.
@@ -88,10 +99,19 @@ def normalize_team_name(team: dict) -> str:
 
 
 def _fetch_from_api(api_key: str) -> list[dict]:
+    # No status filter, deliberately -- status=SCHEDULED as a query param
+    # turned out to be a literal match against football-data.org's status
+    # enum, and most not-yet-played matches actually carry status TIMED,
+    # not SCHEDULED (SCHEDULED,FINISHED as a filter silently dropped every
+    # TIMED match, which is most of a live season -- caught by checking the
+    # raw API response directly, not by guessing). One competition's season
+    # is small enough (380 matches) to just fetch everything and classify
+    # client-side below, which also means IN_PLAY/PAUSED/POSTPONED/etc.
+    # degrade to "not FINISHED" instead of silently vanishing again if
+    # football-data.org's status enum has more values than we've seen.
     resp = requests.get(
         f"{BASE_URL}/competitions/{COMPETITION}/matches",
         headers={"X-Auth-Token": api_key},
-        params={"status": "SCHEDULED"},
         timeout=REQUEST_TIMEOUT,
     )
     resp.raise_for_status()
@@ -100,6 +120,8 @@ def _fetch_from_api(api_key: str) -> list[dict]:
 
     fixtures = []
     for m in matches:
+        is_finished = m["status"] == "FINISHED"
+        full_time = m["score"]["fullTime"]
         fixtures.append({
             "id": m["id"],
             "kickoff_utc": m["utcDate"],
@@ -107,11 +129,14 @@ def _fetch_from_api(api_key: str) -> list[dict]:
             "matchday": m["matchday"],
             "home_team": normalize_team_name(m["homeTeam"]),
             "away_team": normalize_team_name(m["awayTeam"]),
+            "status": "FINISHED" if is_finished else "SCHEDULED",
+            "home_score": full_time["home"] if is_finished else None,
+            "away_score": full_time["away"] if is_finished else None,
         })
     return fixtures
 
 
-def get_upcoming_fixtures(api_key: str | None, force_refresh: bool = False) -> dict:
+def get_season_fixtures(api_key: str | None, force_refresh: bool = False) -> dict:
     """Returns {"fixtures": [...], "fetched_at": iso str or None, "error": str or None}.
     Never raises -- fixtures are a convenience feature, not load-bearing;
     a football-data.org outage or missing key should degrade to an empty

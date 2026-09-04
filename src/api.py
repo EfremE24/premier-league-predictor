@@ -44,7 +44,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sklearn.pipeline import Pipeline
 
-from fixtures import CURRENT_PL_TEAMS, get_upcoming_fixtures
+from fixtures import CURRENT_PL_TEAMS, get_season_fixtures
 from predict import CLASS_LABELS, infer_season, load_artifacts, predict
 
 load_dotenv()  # local dev only -- reads .env if present; a no-op when it isn't
@@ -183,14 +183,15 @@ def model_info(request: Request) -> dict:
 
 @app.get("/fixtures")
 def list_fixtures(request: Request) -> dict:
-    """Upcoming Premier League fixtures from football-data.org, so the
-    frontend can offer a picker instead of requiring manual team/date
-    entry. Each fixture is annotated with whether each team has training
-    history in feature_state -- a team without it (e.g. freshly promoted)
-    will still predict fine via the cold-start fallback in
-    pre_match_features(), but the frontend can use this to show that
-    upfront rather than as a surprise after submitting."""
-    result = get_upcoming_fixtures(os.environ.get("FOOTBALL_DATA_API_KEY"))
+    """Premier League fixtures for the season -- both already-played
+    (status FINISHED, with a score) and not-yet-played (status SCHEDULED)
+    -- so the frontend can offer a full-season picker instead of a list
+    that loses whichever month just happened. Each fixture is annotated
+    with whether each team has training history in feature_state -- a team
+    without it (e.g. freshly promoted) will still predict fine via the
+    cold-start fallback in pre_match_features(), but the frontend can use
+    this to show that upfront rather than as a surprise after submitting."""
+    result = get_season_fixtures(os.environ.get("FOOTBALL_DATA_API_KEY"))
     known_teams = set(request.app.state.feature_state.elo.keys())
     for fixture in result["fixtures"]:
         fixture["home_team_known"] = fixture["home_team"] in known_teams

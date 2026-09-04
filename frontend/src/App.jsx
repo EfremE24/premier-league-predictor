@@ -118,7 +118,13 @@ function App() {
       })
       .then((data) => {
         setFixtures(data.fixtures)
-        if (data.fixtures.length > 0) setSelectedMonth(monthKey(data.fixtures[0].date))
+        // Default to the first not-yet-played match's month, not literally
+        // fixtures[0] -- the list now includes the whole season, so
+        // fixtures[0] is whatever's earliest overall (often already
+        // finished), and landing there on load would bury the actually
+        // relevant "what can I predict" view under already-played months.
+        const firstUpcoming = data.fixtures.find((f) => f.status !== 'FINISHED') ?? data.fixtures[0]
+        if (firstUpcoming) setSelectedMonth(monthKey(firstUpcoming.date))
         if (data.error) setFixturesError(data.error)
       })
       .catch((err) => setFixturesError(err.message))
@@ -261,7 +267,7 @@ function App() {
 
           <div className="fixtures-block">
             <div className="fixtures-heading">
-              <p className="block-label">Upcoming, from football-data.org</p>
+              <p className="block-label">This season, from football-data.org</p>
               {availableMonths.length > 1 && (
                 <select
                   className="month-filter"
@@ -282,23 +288,43 @@ function App() {
             )}
             {visibleFixtures.length > 0 && (
               <div className="fixtures-list">
-                {visibleFixtures.map((f) => (
-                  <button
-                    type="button"
-                    key={f.id}
-                    className={`fixture-row ${selectedFixtureId === f.id ? 'selected' : ''}`}
-                    onClick={() => applyFixture(f)}
-                  >
-                    <span className="fixture-date">{formatFixtureDate(f.date)}</span>
-                    <span className="fixture-matchup">
-                      <TeamSwatch team={f.home_team} /> {f.home_team} vs{' '}
-                      <TeamSwatch team={f.away_team} /> {f.away_team}
-                    </span>
-                    {(!f.home_team_known || !f.away_team_known) && (
-                      <span className="fixture-tag">cold start</span>
-                    )}
-                  </button>
-                ))}
+                {visibleFixtures.map((f) => {
+                  const isFinished = f.status === 'FINISHED'
+                  const matchupContent = (
+                    <>
+                      <span className="fixture-date">{formatFixtureDate(f.date)}</span>
+                      <span className="fixture-matchup">
+                        <TeamSwatch team={f.home_team} /> {f.home_team} vs{' '}
+                        <TeamSwatch team={f.away_team} /> {f.away_team}
+                      </span>
+                      {isFinished ? (
+                        <span className="fixture-score">{f.home_score}&ndash;{f.away_score} FT</span>
+                      ) : (
+                        (!f.home_team_known || !f.away_team_known) && (
+                          <span className="fixture-tag">cold start</span>
+                        )
+                      )}
+                    </>
+                  )
+                  return isFinished ? (
+                    <div
+                      key={f.id}
+                      className="fixture-row finished"
+                      title="Already played -- team-strength data is frozen as of training time, so this isn't offered as something to predict."
+                    >
+                      {matchupContent}
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      key={f.id}
+                      className={`fixture-row ${selectedFixtureId === f.id ? 'selected' : ''}`}
+                      onClick={() => applyFixture(f)}
+                    >
+                      {matchupContent}
+                    </button>
+                  )
+                })}
               </div>
             )}
           </div>
