@@ -49,6 +49,15 @@ Two findings drove real design decisions, not just observations:
    work — an honest, unglamorous result, and the actual headline finding
    of this project rather than something to spin.
 
+The live site doesn't just state finding #2 — it lets you check it.
+There's a **prediction mode switcher** (Market-aware / Team-stat /
+Combined), and each mode is a genuinely different trained model, not the
+same model with inputs zeroed out. Switch to Team-stat on any matchup and
+watch the market-derived features gray out in the "what the model
+actually saw" panel, the prediction shift, and the live metrics confirm
+it's the weaker mode — see [`MODEL_NOTES.md`](MODEL_NOTES.md#4-the-site-lets-you-switch-between-all-three-models-not-just-read-about-them)
+for the full per-mode comparison (accuracy, log loss, ROC AUC, Brier score).
+
 ## Project layout
 
 ```
@@ -56,18 +65,22 @@ data/
   raw/            one CSV per season, as downloaded (gitignored)
   processed/      combined matches.csv + features.csv (gitignored)
 models/
-  rf_final_model.joblib    the fitted, selected model (committed — see below)
-  feature_state.joblib     per-team Elo/form/rest/PPG state at save time
-  model_metadata.json      hyperparams, split, confirmed test metrics
+  model_market_only.joblib     fitted model, imp_prob_h/d/a only
+  model_team_stat_only.joblib  fitted model, Elo/form/rest/PPG only
+  model_combined.joblib        fitted model, all 15 features (default mode)
+  feature_state.joblib         per-team Elo/form/rest/PPG state, shared across modes
+  model_metadata.json          per-mode hyperparams, split, confirmed test metrics
 src/
   fetch_data.py   download + combine 11 PL seasons from football-data.co.uk
   features.py     15 engineered features via a leak-free chronological pass
   fixtures.py     live upcoming fixtures from football-data.org
-  train.py        time-based split, class-weight + feature-set ablations
-  predict.py      CLI: raw fixture inputs -> H/D/A probabilities
+  train.py        time-based split, class-weight + feature-set ablations,
+                   persists one model per prediction mode
+  predict.py      CLI: raw fixture inputs -> H/D/A probabilities, any mode
   api.py          FastAPI wrapper around predict.py (no duplicated logic)
-frontend/         Vite + React app: fixture picker, live prediction, model
-                  transparency (feature values used, feature importances)
+frontend/         Vite + React app: prediction mode switcher, fixture picker,
+                  live prediction, model transparency (feature values used,
+                  per-mode feature importances)
 tests/
 MODEL_NOTES.md    full ablation write-up, in plain language, for interviews
 ```

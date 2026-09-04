@@ -1,37 +1,10 @@
 {
-  "model_type": "RandomForestClassifier",
-  "class_weight": null,
-  "feature_set": "combined",
-  "feature_columns": [
-    "elo_home",
-    "elo_away",
-    "elo_gap",
-    "form_home",
-    "form_away",
-    "form_gap",
-    "home_ppg",
-    "away_ppg",
-    "home_advantage_gap",
-    "rest_days_home",
-    "rest_days_away",
-    "rest_days_gap",
-    "imp_prob_h",
-    "imp_prob_d",
-    "imp_prob_a"
-  ],
+  "class_weight": "none",
   "class_order": [
     "A",
     "D",
     "H"
   ],
-  "rf_params": {
-    "n_estimators": 500,
-    "max_depth": 6,
-    "min_samples_leaf": 30,
-    "random_state": 42,
-    "n_jobs": -1,
-    "class_weight": null
-  },
   "train_seasons": [
     "2015/16",
     "2016/17",
@@ -49,10 +22,80 @@
   ],
   "train_row_count": 3420,
   "test_row_count": 760,
-  "test_log_loss": 0.9980894681463824,
-  "test_accuracy": 0.5105263157894737,
   "feature_state_as_of_date": "2026-05-24",
   "feature_state_note": "state reflects ALL matches through the date above, not just the training window -- see module docstring 'Persisted artifacts'",
-  "saved_at_utc": "2026-09-02T14:18:17.055473+00:00",
+  "modes": {
+    "market_only": {
+      "label": "Market-aware",
+      "description": "Uses only the market's implied win/draw/away probabilities.",
+      "model_type": "LogisticRegression",
+      "algorithm_label": "Logistic Regression",
+      "feature_columns": [
+        "imp_prob_h",
+        "imp_prob_d",
+        "imp_prob_a"
+      ],
+      "test_accuracy": 0.5184210526315789,
+      "test_log_loss": 0.9988866067493924,
+      "test_roc_auc": 0.6475252040071667,
+      "test_brier_score": 0.5975767409440027,
+      "model_file": "model_market_only.joblib"
+    },
+    "team_stat_only": {
+      "label": "Team-stat",
+      "description": "Hides market odds -- Elo, form, rest, and points-per-game history only.",
+      "model_type": "LogisticRegression",
+      "algorithm_label": "Logistic Regression",
+      "feature_columns": [
+        "elo_home",
+        "elo_away",
+        "elo_gap",
+        "form_home",
+        "form_away",
+        "form_gap",
+        "home_ppg",
+        "away_ppg",
+        "home_advantage_gap",
+        "rest_days_home",
+        "rest_days_away",
+        "rest_days_gap"
+      ],
+      "test_accuracy": 0.5052631578947369,
+      "test_log_loss": 1.0137472313129923,
+      "test_roc_auc": 0.6317047308695686,
+      "test_brier_score": 0.6087312542583173,
+      "model_file": "model_team_stat_only.joblib"
+    },
+    "combined": {
+      "label": "Combined",
+      "description": "Uses both market odds and team-strength history.",
+      "model_type": "RandomForestClassifier",
+      "algorithm_label": "Random Forest",
+      "feature_columns": [
+        "elo_home",
+        "elo_away",
+        "elo_gap",
+        "form_home",
+        "form_away",
+        "form_gap",
+        "home_ppg",
+        "away_ppg",
+        "home_advantage_gap",
+        "rest_days_home",
+        "rest_days_away",
+        "rest_days_gap",
+        "imp_prob_h",
+        "imp_prob_d",
+        "imp_prob_a"
+      ],
+      "test_accuracy": 0.5105263157894737,
+      "test_log_loss": 0.9980894681463824,
+      "test_roc_auc": 0.6504078800125925,
+      "test_brier_score": 0.5966082127383162,
+      "model_file": "model_combined.joblib"
+    }
+  },
+  "best_mode": "combined",
+  "saved_at_utc": "2026-09-04T16:54:58.436455+00:00",
   "sklearn_version": "1.9.0"
 }

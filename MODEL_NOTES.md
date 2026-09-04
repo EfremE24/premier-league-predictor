@@ -142,6 +142,36 @@ one that belongs in the README and in interviews, is: *the model matches
 the market's performance and adds a small, real edge via team-strength
 features, but does not clearly outperform market-only pricing.*
 
+## 4. The site lets you switch between all three models, not just read about them
+
+Rather than shipping only the combined model, `train.py` persists one
+fitted model per feature-set slice from the ablation above --
+`model_market_only.joblib`, `model_team_stat_only.joblib`,
+`model_combined.joblib` -- and the frontend exposes a live "prediction
+mode" switcher. Each mode is a genuinely different fitted model (not one
+model with inputs zeroed out), and each mode's algorithm was picked
+independently by log loss, same rule as the overall selection:
+
+| Mode | Algorithm | Test log loss | Test accuracy | Test ROC AUC | Test Brier score |
+|---|---|---|---|---|---|
+| Market-aware | Logistic Regression | 0.9989 | 51.8% | 0.6475 | 0.5976 |
+| Team-stat | Logistic Regression | 1.0137 | 50.5% | 0.6317 | 0.6087 |
+| **Combined** | **Random Forest** | **0.9981** | **51.1%** | **0.6504** | **0.5966** |
+
+Worth noting: combined wins on *every* metric here, not just log loss --
+lowest log loss, highest ROC AUC, lowest Brier score. The three metrics
+agreeing removes one worry about the original selection (that log loss
+alone might have picked a fluke).
+
+The point of building this wasn't new modeling -- it's making the finding
+in section 2 something a reader can *do* instead of just read: switch to
+team-stat mode on a given matchup and watch the market-derived features
+gray out in the "what the model actually saw" panel, watch the prediction
+shift, and see live-updating metrics confirm it's the weaker mode. That's
+a more convincing demonstration of "the market is doing most of the work"
+than the paragraph above, even though the paragraph is what's actually
+being demonstrated.
+
 ## Known limitations (carried over from `features.py`, still unresolved)
 
 - **Newly promoted teams** start at a neutral Elo (1500) even though

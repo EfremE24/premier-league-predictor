@@ -35,30 +35,44 @@ This script runs three passes:
      and RF. Tests whether the engineered team-strength features carry any
      signal the market doesn't already have priced in.
 
-Final selection: Random Forest, class_weight=None, combined feature set --
-best test-set log loss (0.9981) across every ablation above. See
-MODEL_NOTES.md for the full reasoning (market-only came within 0.0006 log
-loss of it; picked anyway for reasons documented there, not just "it won").
-The exact fitted model from step 2 (not a refit) is what gets persisted, so
-the saved artifact's log loss is guaranteed to match what's reported here.
+Final selection, per prediction mode: rather than persisting only the
+single overall-best model (Random Forest, combined features, log loss
+0.9981), this saves one model per feature-set slice from step 2 --
+market_only, team_stat_only, combined -- so the frontend can offer a live
+mode switcher that exposes the feature-set ablation interactively instead
+of only as a write-up. Each mode's winning algorithm is picked
+independently by log loss (same rule as the overall selection): combined's
+best happens to be Random Forest, market-only's and team-stat-only's best
+are both Logistic Regression. Using whichever actually won per slice is
+more honest than forcing one algorithm across all three just for
+consistency. See MODEL_NOTES.md for the full reasoning behind picking
+combined-RF as the *default* mode despite market-only being nearly as good.
+The exact fitted models from step 2 (not refits) are what get persisted, so
+each saved artifact's log loss is guaranteed to match what's reported here.
 
 Persisted artifacts (models/):
-  - rf_final_model.joblib   the fitted RandomForestClassifier itself
+  - model_market_only.joblib     fitted model, imp_prob_h/d/a only
+  - model_team_stat_only.joblib  fitted model, everything except market odds
+  - model_combined.joblib        fitted model, all 15 features (the default)
   - feature_state.joblib    FeatureState as of the END of the full dataset
                              (all 11 seasons, through 2025/26) -- NOT the
-                             training cutoff (2023/24). The model's learned
-                             splits come from the 2015/16-2023/24 window
-                             (matches the log loss above), but a fixture
-                             predict.py is asked about is always in the
-                             future relative to ALL known results, so the
-                             Elo/form/rest state it starts from needs to be
-                             as current as possible. This is a deliberate
+                             training cutoff (2023/24). Shared across all
+                             three modes above, since it's the same feature
+                             engineering regardless of which columns a given
+                             mode's model actually consumes. The models'
+                             learned splits come from the 2015/16-2023/24
+                             window (matches the log losses above), but a
+                             fixture predict.py is asked about is always in
+                             the future relative to ALL known results, so
+                             the Elo/form/rest state it starts from needs to
+                             be as current as possible. This is a deliberate
                              train-window vs. state-window mismatch, not an
                              oversight -- flagged in MODEL_NOTES.md.
-  - model_metadata.json     feature column order, class order, hyperparams,
-                             split seasons, and the confirmed test log loss/
-                             accuracy, so predict.py doesn't need to
-                             re-derive any of this from train.py's source.
+  - model_metadata.json     per-mode feature columns, algorithm, and
+                             confirmed test accuracy/log loss/ROC AUC/Brier
+                             score, plus shared split info, so predict.py
+                             and api.py don't need to re-derive any of this
+                             from train.py's source.
 """
 import json
 from datetime import datetime, timezone
@@ -71,7 +85,7 @@ import sklearn
 from sklearn.base import clone
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, log_loss, precision_recall_fscore_support
+from sklearn.metrics import accuracy_score, log_loss, precision_recall_fscore_support, roc_auc_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
@@ -96,6 +110,15 @@ FEATURE_SETS = {
     "Market-only": MARKET_COLS,
     "Team-stat-only": TEAM_STAT_COLS,
     "Combined": FEATURE_COLUMNS,
+}
+
+# Maps step-2 ablation labels to the mode keys the API/frontend use.
+MODE_KEYS = {"Market-only": "market_only", "Team-stat-only": "team_stat_only", "Combined": "combined"}
+MODE_LABELS = {"market_only": "Market-aware", "team_stat_only": "Team-stat", "combined": "Combined"}
+MODE_DESCRIPTIONS = {
+    "market_only": "Uses only the market's implied win/draw/away probabilities.",
+    "team_stat_only": "Hides market odds -- Elo, form, rest, and points-per-game history only.",
+    "combined": "Uses both market odds and team-strength history.",
 }
 
 # See module docstring re: why this is regularized (shallow depth, largish
@@ -140,14 +163,27 @@ def market_baseline_proba(df: pd.DataFrame) -> pd.DataFrame:
     })[CLASS_ORDER]
 
 
+def multiclass_brier_score(y_true: pd.Series, proba: pd.DataFrame) -> float:
+    """Mean squared error between predicted probabilities and the one-hot
+    true label, summed across classes then averaged over rows -- the
+    standard multiclass generalization of the binary Brier score (sklearn
+    only ships brier_score_loss for two classes). Lower is better, same
+    direction as log loss, but on a bounded 0-2 scale instead of unbounded."""
+    y_onehot = pd.get_dummies(y_true)[CLASS_ORDER].to_numpy(dtype=float)
+    diff = proba[CLASS_ORDER].to_numpy() - y_onehot
+    return float(np.mean(np.sum(diff**2, axis=1)))
+
+
 def evaluate(name: str, y_true: pd.Series, proba: pd.DataFrame) -> dict:
     y_pred = proba.idxmax(axis=1)
     acc = accuracy_score(y_true, y_pred)
     ll = log_loss(y_true, proba.to_numpy(), labels=CLASS_ORDER)
+    auc = roc_auc_score(y_true, proba[CLASS_ORDER].to_numpy(), labels=CLASS_ORDER, multi_class="ovr")
+    brier = multiclass_brier_score(y_true, proba)
     precision, recall, f1, support = precision_recall_fscore_support(
         y_true, y_pred, labels=["H", "D", "A"], zero_division=0
     )
-    result = {"model": name, "accuracy": acc, "log_loss": ll}
+    result = {"model": name, "accuracy": acc, "log_loss": ll, "roc_auc": auc, "brier_score": brier}
     for cls, p, r, f, s in zip(["H", "D", "A"], precision, recall, f1, support):
         result[f"precision_{cls}"] = p
         result[f"recall_{cls}"] = r
@@ -217,41 +253,66 @@ def draw_overconfidence_in_range(y_true: pd.Series, proba: pd.DataFrame, low: fl
     return n, mean_pred, actual, mean_pred - actual
 
 
-def save_final_model(fitted_model, test_result: dict, train_row_count: int, test_row_count: int) -> None:
-    """Persist the already-fitted final model plus everything predict.py
-    will need to go from a raw upcoming fixture to a feature row: the
-    feature-engineering state (see module docstring for why this is
-    computed over the full dataset, not just the training window) and a
-    metadata file recording exactly what was trained and how it scored.
-    Does NOT build predict.py itself -- deployment is a separate step."""
+def save_mode_models(fs_results: list[dict], fs_models: dict, class_weight_label: str,
+                      train_row_count: int, test_row_count: int) -> dict:
+    """Persist one model per prediction mode (market_only / team_stat_only /
+    combined) rather than a single overall-best model -- lets the frontend
+    offer a live mode switcher that exposes the feature-set ablation
+    interactively rather than only as a write-up. For each mode, the
+    winning algorithm is picked independently by log loss (same rule as
+    the old single-model selection) -- see module docstring for why using
+    whichever algorithm actually won each slice is more honest than forcing
+    one algorithm across all three. Does NOT build the API/frontend side of
+    this -- that's a separate step."""
     MODELS_DIR.mkdir(exist_ok=True)
-
-    model_path = MODELS_DIR / "rf_final_model.joblib"
-    joblib.dump(fitted_model, model_path)
 
     all_matches = pd.read_csv(MATCHES_PATH, parse_dates=["Date"])
     _, final_state = run_feature_pipeline(all_matches)
     state_path = MODELS_DIR / "feature_state.joblib"
     joblib.dump(final_state, state_path)
 
+    modes_meta = {}
+    for fs_label, cols in FEATURE_SETS.items():
+        mode_key = MODE_KEYS[fs_label]
+        candidates = [r for r in fs_results if r["model"].startswith(f"{fs_label} - ")]
+        best = min(candidates, key=lambda r: r["log_loss"])
+        fitted_model = fs_models[best["model"]]
+        algo_label = best["model"].split(" - ", 1)[1]
+        clf = fitted_model.named_steps["clf"] if isinstance(fitted_model, Pipeline) else fitted_model
+
+        model_path = MODELS_DIR / f"model_{mode_key}.joblib"
+        joblib.dump(fitted_model, model_path)
+
+        modes_meta[mode_key] = {
+            "label": MODE_LABELS[mode_key],
+            "description": MODE_DESCRIPTIONS[mode_key],
+            "model_type": type(clf).__name__,
+            "algorithm_label": algo_label,
+            "feature_columns": cols,
+            "test_accuracy": best["accuracy"],
+            "test_log_loss": best["log_loss"],
+            "test_roc_auc": best["roc_auc"],
+            "test_brier_score": best["brier_score"],
+            "model_file": model_path.name,
+        }
+        print(f"  saved {model_path.name}  ({algo_label}, log loss {best['log_loss']:.4f})")
+
+    best_mode = min(modes_meta, key=lambda k: modes_meta[k]["test_log_loss"])
+
     metadata = {
-        "model_type": "RandomForestClassifier",
-        "class_weight": None,
-        "feature_set": "combined",
-        "feature_columns": FEATURE_COLUMNS,
+        "class_weight": class_weight_label,
         "class_order": CLASS_ORDER,
-        "rf_params": {**RF_PARAMS, "class_weight": None},
         "train_seasons": TRAIN_SEASONS,
         "test_seasons": TEST_SEASONS,
         "train_row_count": train_row_count,
         "test_row_count": test_row_count,
-        "test_log_loss": test_result["log_loss"],
-        "test_accuracy": test_result["accuracy"],
         "feature_state_as_of_date": str(all_matches["Date"].max().date()),
         "feature_state_note": (
             "state reflects ALL matches through the date above, not just the "
             "training window -- see module docstring 'Persisted artifacts'"
         ),
+        "modes": modes_meta,
+        "best_mode": best_mode,
         "saved_at_utc": datetime.now(timezone.utc).isoformat(),
         "sklearn_version": sklearn.__version__,
     }
@@ -259,13 +320,10 @@ def save_final_model(fitted_model, test_result: dict, train_row_count: int, test
     with open(metadata_path, "w") as f:
         json.dump(metadata, f, indent=2)
 
-    print("\n" + "=" * 100)
-    print("FINAL MODEL SAVED: Random Forest, class_weight=None, combined features")
-    print("=" * 100)
-    print(f"  {model_path}  (fitted RandomForestClassifier)")
-    print(f"  {state_path}  (feature-engineering state as of {metadata['feature_state_as_of_date']})")
+    print(f"\n  {state_path}  (feature-engineering state as of {metadata['feature_state_as_of_date']}, shared across modes)")
     print(f"  {metadata_path}")
-    print(f"Confirmed test log loss: {test_result['log_loss']:.4f} | accuracy: {test_result['accuracy']:.4f}")
+    print(f"\nBest mode by log loss: {best_mode} ({modes_meta[best_mode]['test_log_loss']:.4f}) -- default mode in the API")
+    return metadata
 
 
 def main() -> None:
@@ -347,10 +405,11 @@ def main() -> None:
     print_overall_table(fs_results, "Accuracy / Log Loss")
     print_draw_calibration(y_test, fs_proba, "Draw-class calibration")
 
-    # ================= FINAL MODEL: save the selected fit =================
-    final_name = "Combined - Random Forest"
-    final_result = next(r for r in fs_results if r["model"] == final_name)
-    save_final_model(fs_models[final_name], final_result, train_row_count=len(train), test_row_count=len(test))
+    # ================= FINAL: persist one model per prediction mode =================
+    print("\n" + "=" * 100)
+    print("SAVING ONE MODEL PER PREDICTION MODE (market_only / team_stat_only / combined)")
+    print("=" * 100)
+    save_mode_models(fs_results, fs_models, winning_cw_label, train_row_count=len(train), test_row_count=len(test))
 
 
 if __name__ == "__main__":

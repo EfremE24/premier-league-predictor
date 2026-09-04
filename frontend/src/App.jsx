@@ -79,6 +79,7 @@ function App() {
   const [selectedFixtureId, setSelectedFixtureId] = useState(null)
   const [selectedMonth, setSelectedMonth] = useState(null)
 
+  const [mode, setMode] = useState('combined')
   const [homeTeam, setHomeTeam] = useState('')
   const [awayTeam, setAwayTeam] = useState('')
   const [date, setDate] = useState(defaultDate())
@@ -188,6 +189,7 @@ function App() {
           avg_h: parseFloat(avgH),
           avg_d: parseFloat(avgD),
           avg_a: parseFloat(avgA),
+          mode,
         }),
       })
       const data = await res.json()
@@ -235,6 +237,27 @@ function App() {
       <div className="layout">
         <section className="card">
           <h2>Matchup Inputs</h2>
+
+          {modelInfo && (
+            <div className="mode-select">
+              <p className="block-label">Prediction mode</p>
+              <div className="mode-options">
+                {Object.entries(modelInfo.modes).map(([key, info]) => (
+                  <label key={key} className={`mode-option ${mode === key ? 'selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name="mode"
+                      value={key}
+                      checked={mode === key}
+                      onChange={() => { setMode(key); setResult(null); setError(null) }}
+                    />
+                    <span className="mode-option-label">{info.label}</span>
+                    <span className="mode-option-desc">{info.description}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="fixtures-block">
             <div className="fixtures-heading">
@@ -394,26 +417,32 @@ function App() {
         </section>
       </div>
 
-      {result && (
-        <section className="card features-used">
-          <h2>What the model actually saw</h2>
-          <p className="card-hint">The 15 numbers behind that prediction, as of right before kickoff.</p>
-          {FEATURE_GROUPS.map((group) => (
-            <div key={group.group} className="feature-group">
-              <p className="feature-group-label">{group.group}</p>
-              <div className="feature-grid">
-                {group.keys.map((key) => (
-                  <div key={key} className="feature-cell">
-                    <span className="feature-value">{result.features[key]}</span>
-                    <span className="feature-label">{FEATURE_LABELS[key]}</span>
-                    <span className="feature-key">{key}</span>
-                  </div>
-                ))}
+      {result && modelInfo && (() => {
+        const usedCols = modelInfo.modes[result.mode]?.feature_columns ?? []
+        return (
+          <section className="card features-used">
+            <h2>What the model actually saw</h2>
+            <p className="card-hint">
+              All 15 computed values, as of right before kickoff. {modelInfo.modes[result.mode]?.label} mode
+              only fed the highlighted ones into the model -- the rest are shown for context, grayed out.
+            </p>
+            {FEATURE_GROUPS.map((group) => (
+              <div key={group.group} className="feature-group">
+                <p className="feature-group-label">{group.group}</p>
+                <div className="feature-grid">
+                  {group.keys.map((key) => (
+                    <div key={key} className={`feature-cell ${usedCols.includes(key) ? '' : 'unused'}`}>
+                      <span className="feature-value">{result.features[key]}</span>
+                      <span className="feature-label">{FEATURE_LABELS[key]}</span>
+                      <span className="feature-key">{key}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
-        </section>
-      )}
+            ))}
+          </section>
+        )
+      })()}
 
       <section className="editorial">
         <h2>Before you trust the number</h2>
@@ -439,10 +468,13 @@ function App() {
       {modelInfo && (
         <section className="card">
           <h2>What the model leans on</h2>
-          <p className="card-hint">Across every prediction, not just the one above.</p>
+          <p className="card-hint">
+            {modelInfo.modes[mode].label} mode, across every prediction it's made -- not just the one above.
+            Switch modes to compare.
+          </p>
           <ul className="importance-list">
-            {modelInfo.feature_importances.map((row) => {
-              const max = modelInfo.feature_importances[0].importance
+            {modelInfo.modes[mode].feature_importances.map((row) => {
+              const max = modelInfo.modes[mode].feature_importances[0].importance
               return (
                 <li key={row.feature}>
                   <span className="label">{FEATURE_LABELS[row.feature] ?? row.feature}</span>
@@ -460,10 +492,15 @@ function App() {
       {modelInfo && (
         <section className="card model-metrics">
           <h2>The fine print</h2>
-          <p className="card-hint">Time-based split -- trained on earlier seasons, tested on later ones. Never random.</p>
+          <p className="card-hint">
+            {modelInfo.modes[mode].label} mode. Time-based split -- trained on earlier seasons, tested on
+            later ones. Never random.
+          </p>
           <div className="metrics-grid">
             <div className="metric">
-              <span className="metric-value">{MODEL_TYPE_LABELS[modelInfo.model_type] ?? modelInfo.model_type}</span>
+              <span className="metric-value">
+                {MODEL_TYPE_LABELS[modelInfo.modes[mode].model_type] ?? modelInfo.modes[mode].model_type}
+              </span>
               <span className="metric-label">Model</span>
             </div>
             <div className="metric">
@@ -475,12 +512,20 @@ function App() {
               <span className="metric-label">Test rows ({modelInfo.test_seasons.join(', ')})</span>
             </div>
             <div className="metric">
-              <span className="metric-value">{(modelInfo.test_accuracy * 100).toFixed(1)}%</span>
+              <span className="metric-value">{(modelInfo.modes[mode].test_accuracy * 100).toFixed(1)}%</span>
               <span className="metric-label">Test accuracy</span>
             </div>
             <div className="metric">
-              <span className="metric-value">{modelInfo.test_log_loss.toFixed(4)}</span>
+              <span className="metric-value">{modelInfo.modes[mode].test_log_loss.toFixed(4)}</span>
               <span className="metric-label">Test log loss (selection metric)</span>
+            </div>
+            <div className="metric">
+              <span className="metric-value">{modelInfo.modes[mode].test_roc_auc.toFixed(4)}</span>
+              <span className="metric-label">Test ROC AUC</span>
+            </div>
+            <div className="metric">
+              <span className="metric-value">{modelInfo.modes[mode].test_brier_score.toFixed(4)}</span>
+              <span className="metric-label">Test Brier score</span>
             </div>
           </div>
         </section>

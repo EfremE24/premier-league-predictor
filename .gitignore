@@ -6,11 +6,15 @@ data/processed/*
 # Model artifacts ARE committed (unlike data/): Render's deploy has no
 # access to football-data.co.uk-derived CSVs or a place to run the full
 # fetch->features->train pipeline at build time, so the API needs these
-# three files present in the repo to serve predictions at all. They're
-# small (~3MB total). Everything else under models/ stays ignored.
+# files present in the repo to serve predictions at all. Small (~3MB
+# total, market_only/team_stat_only are Logistic Regression so tiny;
+# combined is the ~3MB Random Forest). Everything else under models/
+# stays ignored.
 models/*
 !models/.gitkeep
-!models/rf_final_model.joblib
+!models/model_market_only.joblib
+!models/model_team_stat_only.joblib
+!models/model_combined.joblib
 !models/feature_state.joblib
 !models/model_metadata.json
 
