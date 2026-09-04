@@ -419,21 +419,19 @@ function App() {
         <h2>Before you trust the number</h2>
         <ol className="read-list">
           <li>
-            <strong>Draws are the one it struggles with.</strong> About 1 in 4 Premier League
-            matches end level, and that's the call this model gets wrong most often. It's not
-            dodging the question -- it really will tell you "35% draw" when it means it -- just
-            know that's the shakiest of the three numbers. Full receipts in the calibration
-            write-up in the repo, if you want to see exactly how shaky.
+            <strong>Draws are genuinely hard.</strong> About 1 in 4 Premier League matches end
+            level. The model puts real weight on a draw rather than dodging the call, but it's
+            the outcome it gets wrong most -- see the calibration write-up in the repo.
           </li>
           <li>
-            <strong>Honestly? The market's doing most of the work.</strong> The two odds-based
-            inputs move this model more than every team-strength stat combined (see below).
-            Betting markets are famously hard to beat, and this model doesn't beat them -- it
-            mostly just agrees with them, with a small assist from Elo and form on the margins.
+            <strong>The market is doing most of the work.</strong> The two market-odds inputs
+            outweigh every team-strength feature combined (below). That tracks with the broader
+            finding that betting markets are hard to beat -- this model mostly agrees with them,
+            it doesn't outsmart them.
           </li>
           <li>
-            <strong>This is a portfolio project, not a tip sheet.</strong> Built to show the work,
-            not to make anyone money. Please don't bet on it.
+            <strong>This is a portfolio project, not a tipster.</strong> Historical results,
+            trained for practice. Don't bet on it.
           </li>
         </ol>
       </section>
