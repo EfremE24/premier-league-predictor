@@ -21,6 +21,16 @@ function formatFixtureDate(isoDate) {
   return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
+// "Home win" / "Away win" on their own don't say which actual team that
+// is -- this turns them into "Liverpool (Home)" / "Liverpool (Away)" so
+// the probability rows and Model Pick read as a real team, not just a
+// role. Draw has no team to attach, so it stays "Draw".
+function outcomeDisplayLabel(outcomeLabel, homeTeam, awayTeam) {
+  if (outcomeLabel === 'Home win') return `${homeTeam} (Home)`
+  if (outcomeLabel === 'Away win') return `${awayTeam} (Away)`
+  return 'Draw'
+}
+
 function monthKey(isoDate) {
   return isoDate.slice(0, 7) // "2026-09-04" -> "2026-09"
 }
@@ -416,7 +426,9 @@ function App() {
 
               <div className="model-pick">
                 <span className="model-pick-label">Model pick</span>
-                <span className="model-pick-value">{result.predicted_outcome}</span>
+                <span className="model-pick-value">
+                  {outcomeDisplayLabel(result.predicted_outcome, result.home_team, result.away_team)}
+                </span>
               </div>
 
               <ul className="probabilities">
@@ -428,7 +440,8 @@ function App() {
                   return (
                     <li key={label} className={isWinner ? 'winner' : ''}>
                       <span className="label">
-                        {rowTeam && <TeamSwatch team={rowTeam} />} {label}
+                        {rowTeam && <TeamSwatch team={rowTeam} />}{' '}
+                        {outcomeDisplayLabel(label, result.home_team, result.away_team)}
                       </span>
                       <div className="bar-track">
                         <div className="bar-fill" style={{ width: `${prob * 100}%` }} />
