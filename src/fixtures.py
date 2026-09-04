@@ -38,7 +38,11 @@ BASE_URL = "https://api.football-data.org/v4"
 COMPETITION = "PL"
 REQUEST_TIMEOUT = 10
 CACHE_TTL_SECONDS = 6 * 60 * 60  # 6 hours -- see module docstring
-MAX_FIXTURES = 20  # roughly the next 2 matchdays; the season has ~380 total
+# All SCHEDULED matches for the season (~350+ once a season is underway,
+# one competition so nowhere near football-data.org's own response-size
+# limits) are returned -- no artificial cap. The frontend filters by month
+# rather than the backend truncating to "the next N", so a user can browse
+# further ahead than just the next couple of matchdays.
 
 # football-data.org full team name -> our (football-data.co.uk-style) name.
 # Hand-verified against a live /v4/competitions/PL/teams response.
@@ -95,7 +99,7 @@ def _fetch_from_api(api_key: str) -> list[dict]:
     matches.sort(key=lambda m: m["utcDate"])
 
     fixtures = []
-    for m in matches[:MAX_FIXTURES]:
+    for m in matches:
         fixtures.append({
             "id": m["id"],
             "kickoff_utc": m["utcDate"],

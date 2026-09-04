@@ -21,6 +21,15 @@ function formatFixtureDate(isoDate) {
   return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
+function monthKey(isoDate) {
+  return isoDate.slice(0, 7) // "2026-09-04" -> "2026-09"
+}
+
+function formatMonthLabel(key) {
+  const d = new Date(`${key}-01T00:00:00`)
+  return d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+}
+
 // Split circle, primary color on the left half and secondary on the
 // right -- a team not in TEAM_COLORS (a one-off preset opponent, say)
 // gets a plain neutral gray rather than breaking.
@@ -68,6 +77,7 @@ function App() {
   const [fixtures, setFixtures] = useState([])
   const [fixturesError, setFixturesError] = useState(null)
   const [selectedFixtureId, setSelectedFixtureId] = useState(null)
+  const [selectedMonth, setSelectedMonth] = useState(null)
 
   const [homeTeam, setHomeTeam] = useState('')
   const [awayTeam, setAwayTeam] = useState('')
@@ -107,6 +117,7 @@ function App() {
       })
       .then((data) => {
         setFixtures(data.fixtures)
+        if (data.fixtures.length > 0) setSelectedMonth(monthKey(data.fixtures[0].date))
         if (data.error) setFixturesError(data.error)
       })
       .catch((err) => setFixturesError(err.message))
@@ -114,6 +125,18 @@ function App() {
 
   const homeOptions = useMemo(() => withValue(teams, homeTeam), [teams, homeTeam])
   const awayOptions = useMemo(() => withValue(teams, awayTeam), [teams, awayTeam])
+
+  // All months that actually have a fixture in them, earliest first --
+  // not a fixed Aug-May list, so this still makes sense mid-season when
+  // only some months have anything left to show.
+  const availableMonths = useMemo(
+    () => [...new Set(fixtures.map((f) => monthKey(f.date)))].sort(),
+    [fixtures],
+  )
+  const visibleFixtures = useMemo(
+    () => (selectedMonth ? fixtures.filter((f) => monthKey(f.date) === selectedMonth) : fixtures),
+    [fixtures, selectedMonth],
+  )
 
   // General odds-comparison search rather than one specific bookmaker --
   // adapts to whichever fixture is selected and doesn't imply an endorsement.
@@ -214,16 +237,29 @@ function App() {
           <h2>Matchup Inputs</h2>
 
           <div className="fixtures-block">
-            <p className="block-label">Upcoming, from football-data.org</p>
+            <div className="fixtures-heading">
+              <p className="block-label">Upcoming, from football-data.org</p>
+              {availableMonths.length > 1 && (
+                <select
+                  className="month-filter"
+                  value={selectedMonth ?? ''}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                >
+                  {availableMonths.map((m) => (
+                    <option key={m} value={m}>{formatMonthLabel(m)}</option>
+                  ))}
+                </select>
+              )}
+            </div>
             {fixturesError && !fixtures.length && (
               <p className="fixtures-empty">Fixtures aren't loading right now -- pick a matchup by hand below.</p>
             )}
             {!fixturesError && !fixtures.length && (
               <p className="fixtures-empty">Loading...</p>
             )}
-            {fixtures.length > 0 && (
+            {visibleFixtures.length > 0 && (
               <div className="fixtures-list">
-                {fixtures.map((f) => (
+                {visibleFixtures.map((f) => (
                   <button
                     type="button"
                     key={f.id}
